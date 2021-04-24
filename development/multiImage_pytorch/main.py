@@ -2,11 +2,12 @@ import math
 from tensorboardX import SummaryWriter
 import shutil
 import torch
+from accelerate import Accelerator
 
 from cli import parse_args
 from dataset import SvbrdfDataset
 from losses import MixedLoss
-from models import SingleViewModel
+from models import MultiViewModel, SingleViewModel
 from pathlib import Path
 from persistence import Checkpoint
 from renderers import LocalRenderer, RednerRenderer
@@ -30,13 +31,13 @@ if checkpoint.is_valid():
 utils.enable_deterministic_random_engine()
 
 # Determine the device
-device = 'cpu'
-if torch.cuda.is_available() and args.gpu_id >= 0:
-    device = 'cuda:{:d}'.format(args.gpu_id)
-print("Using device '{}'".format(device))
+accelerator = Accelerator()
+device = accelerator.device
 
 # Create the model
-model = SingleViewModel(use_coords=args.use_coords).to(device)
+model = MultiViewModel(use_coords=args.use_coords).to(device)
+
+
 if checkpoint.is_valid():
     model = checkpoint.restore_model_state(model)
 elif args.mode == 'test':
@@ -74,6 +75,8 @@ if args.mode == 'train':
     optimizer     = torch.optim.Adam(model.parameters(), lr=1e-5)
     if checkpoint.is_valid():
         optimizer = checkpoint.restore_optimizer_state(optimizer)
+    
+    model, optimizer, training_dataloader, validation_dataloader = accelerator.prepare(model, optimizer, training_dataloader, validation_dataloader)
 
     # TODO: Use scheduler if necessary
     #scheduler    = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min') 
