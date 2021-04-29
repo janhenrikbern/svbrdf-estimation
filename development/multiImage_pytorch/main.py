@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import math
 from tensorboardX import SummaryWriter
 import shutil
@@ -17,7 +18,7 @@ args = parse_args()
 
 clean_training = args.mode == 'train' and args.retrain
 
-# Load the checkpoint 
+# Load the checkpoint
 checkpoint_dir = Path(args.model_dir)
 checkpoint = Checkpoint()
 if not clean_training:
@@ -45,9 +46,9 @@ elif args.mode == 'test':
     exit(1)
 
 # TODO: Choose a random number for the used input image count if we are training and we don't request it to be fix (see fixImageNb for reference)
-data = SvbrdfDataset(data_directory=args.input_dir, 
-                     image_size=args.image_size, scale_mode=args.scale_mode, input_image_count=args.image_count, used_input_image_count=args.used_image_count, 
-                     use_augmentation=True, mix_materials=args.mode=='train',
+data = SvbrdfDataset(data_directory=args.input_dir,
+                     image_size=args.image_size, scale_mode=args.scale_mode, input_image_count=args.image_count, used_input_image_count=args.used_image_count,
+                     use_augmentation=True, mix_materials=args.mode == 'train',
                      no_svbrdf=args.no_svbrdf_input, is_linear=args.linear_input)
 
 epoch_start = 0
@@ -56,14 +57,19 @@ if checkpoint.is_valid():
 
 if args.mode == 'train':
     validation_split = 0.01
-    print("Using {:.2f} % of the data for validation".format(round(validation_split * 100.0, 2)))
-    training_data, validation_data = torch.utils.data.random_split(data, [int(math.ceil(len(data) * (1.0 - validation_split))), int(math.floor(len(data) * validation_split))])
+    print("Using {:.2f} % of the data for validation".format(
+        round(validation_split * 100.0, 2)))
+    training_data, validation_data = torch.utils.data.random_split(data, [int(math.ceil(
+        len(data) * (1.0 - validation_split))), int(math.floor(len(data) * validation_split))])
     print("Training samples: {:d}.".format(len(training_data)))
     print("Validation samples: {:d}.".format(len(validation_data)))
 
-    training_dataloader = torch.utils.data.DataLoader(training_data, batch_size=8, pin_memory=True, shuffle=True)
-    validation_dataloader = torch.utils.data.DataLoader(validation_data, batch_size=8, pin_memory=True, shuffle=False)
-    batch_count = int(math.ceil(len(training_data) / training_dataloader.batch_size))
+    training_dataloader = torch.utils.data.DataLoader(
+        training_data, batch_size=8, pin_memory=True, shuffle=True)
+    validation_dataloader = torch.utils.data.DataLoader(
+        validation_data, batch_size=8, pin_memory=True, shuffle=False)
+    batch_count = int(math.ceil(len(training_data) /
+                                training_dataloader.batch_size))
 
     # Train as many epochs as specified
     epoch_end = args.epochs
@@ -72,14 +78,15 @@ if args.mode == 'train':
 
     # Set up the optimizer
     # TODO: Use betas=(0.5, 0.999)
-    optimizer     = torch.optim.Adam(model.parameters(), lr=1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
     if checkpoint.is_valid():
         optimizer = checkpoint.restore_optimizer_state(optimizer)
-    
-    model, optimizer, training_dataloader, validation_dataloader = accelerator.prepare(model, optimizer, training_dataloader, validation_dataloader)
+
+    model, optimizer, training_dataloader, validation_dataloader = accelerator.prepare(
+        model, optimizer, training_dataloader, validation_dataloader)
 
     # TODO: Use scheduler if necessary
-    #scheduler    = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min') 
+    #scheduler    = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min')
 
     # Set up the loss
     loss_renderer = None
@@ -114,13 +121,14 @@ if args.mode == 'train':
             batch_svbrdf = batch["svbrdf"].to(device)
 
             # Perform a step
-            optimizer.zero_grad() 
+            optimizer.zero_grad()
             outputs = model(batch_inputs)
-            loss    = loss_function(outputs, batch_svbrdf)
-            loss.backward()
+            loss = loss_function(outputs, batch_svbrdf)
+            accelerator.backward(loss)
             optimizer.step()
 
-            print("Epoch {:d}, Batch {:d}, loss: {:f}".format(epoch, i + 1, loss.item()))
+            print("Epoch {:d}, Batch {:d}, loss: {:f}".format(
+                epoch, i + 1, loss.item()))
 
             # Statistics
             writer.add_scalar("loss", loss.item(), batch_index)
@@ -131,7 +139,7 @@ if args.mode == 'train':
 
         if epoch % args.validation_frequency == 0 and len(validation_data) > 0:
             model.eval()
-            
+
             val_loss = 0.0
             batch_count_val = 0
             for batch in validation_dataloader:
@@ -139,21 +147,21 @@ if args.mode == 'train':
                 batch_inputs = batch["inputs"].to(device)
                 batch_svbrdf = batch["svbrdf"].to(device)
 
-                outputs  = model(batch_inputs)
+                outputs = model(batch_inputs)
                 val_loss += loss_function(outputs, batch_svbrdf).item()
                 batch_count_val += 1
             val_loss /= batch_count_val
 
             print("Epoch {:d}, validation loss: {:f}".format(epoch, val_loss))
             writer.add_scalar("val_loss", val_loss, epoch * batch_count)
-        
+
             model.train()
 
     # Save a final snapshot of the model
     Checkpoint.save(checkpoint_dir, args, model, optimizer, epoch)
 
     # FIXME: This does not work with the last conv layers on both the single-view and multi-view model
-    #writer.add_graph(model, last_batch_inputs) 
+    #writer.add_graph(model, last_batch_inputs)
     writer.close()
 
     # Use the validation dataset as test data
@@ -163,18 +171,18 @@ if args.mode == 'train':
         validation_data = training_data
 
     # Use the validation dataset as test data
-    test_data = validation_data 
+    test_data = validation_data
 else:
     test_data = data
 
 model.eval()
 
-test_dataloader = torch.utils.data.DataLoader(test_data, batch_size=1, pin_memory=True)
+test_dataloader = torch.utils.data.DataLoader(
+    test_data, batch_size=1, pin_memory=True)
 
 # Plotting
-import matplotlib.pyplot as plt
 
-fig=plt.figure(figsize=(8, 8))
+fig = plt.figure(figsize=(8, 8))
 row_count = 2 * len(test_data)
 col_count = 5
 for i_row, batch in enumerate(test_dataloader):
@@ -184,9 +192,12 @@ for i_row, batch in enumerate(test_dataloader):
 
     outputs = model(batch_inputs)
 
-    input       = utils.gamma_encode(batch_inputs.squeeze(0)[0]).cpu().permute(1, 2, 0)
-    target_maps = torch.cat(batch_svbrdf.split(3, dim=1), dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
-    output_maps = torch.cat(outputs.split(3, dim=1), dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
+    input = utils.gamma_encode(batch_inputs.squeeze(0)[
+                               0]).cpu().permute(1, 2, 0)
+    target_maps = torch.cat(batch_svbrdf.split(
+        3, dim=1), dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
+    output_maps = torch.cat(outputs.split(3, dim=1),
+                            dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
 
     fig.add_subplot(row_count, col_count, 2 * i_row * col_count + 1)
     plt.imshow(input)
