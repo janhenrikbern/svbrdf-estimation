@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import math
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 import shutil
 import torch
 from accelerate import Accelerator
@@ -148,6 +148,15 @@ if args.mode == 'train':
                 batch_svbrdf = batch["svbrdf"].to(device)
 
                 outputs = model(batch_inputs)
+                output_maps = torch.cat(outputs.split(3, dim=1),
+                                        dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
+                target_maps = torch.cat(batch_svbrdf.split(3, dim=1),
+                                        dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
+                tensorboard_imgs = torch.utils.make_grid(output_maps, nrow=4)
+                writer.add_images(f"output_{epoch}", tensorboard_imgs)
+                tensorboard_imgs = torch.utils.make_grid(target_maps, nrow=4)
+                writer.add_images(f"target_{epoch}", tensorboard_imgs)
+                
                 val_loss += loss_function(outputs, batch_svbrdf).item()
                 batch_count_val += 1
             val_loss /= batch_count_val
@@ -191,7 +200,8 @@ for i_row, batch in enumerate(test_dataloader):
     batch_svbrdf = batch["svbrdf"].to(device)
 
     outputs = model(batch_inputs)
-
+    print(outputs.shape)
+    # tensorboard_imgs = torch.utils.make_grid(outputs, nrow=4)
     input = utils.gamma_encode(batch_inputs.squeeze(0)[
                                0]).cpu().permute(1, 2, 0)
     target_maps = torch.cat(batch_svbrdf.split(
