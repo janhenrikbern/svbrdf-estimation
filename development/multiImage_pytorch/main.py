@@ -3,6 +3,7 @@ import math
 from torch.utils.tensorboard import SummaryWriter
 import shutil
 import torch
+import torchvision
 from accelerate import Accelerator
 
 from cli import parse_args
@@ -78,7 +79,7 @@ if args.mode == 'train':
 
     # Set up the optimizer
     # TODO: Use betas=(0.5, 0.999)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, betas=(0.5, 0.999))
     if checkpoint.is_valid():
         optimizer = checkpoint.restore_optimizer_state(optimizer)
 
@@ -142,21 +143,24 @@ if args.mode == 'train':
 
             val_loss = 0.0
             batch_count_val = 0
+            plot_flag = True
             for batch in validation_dataloader:
                 # Construct inputs
                 batch_inputs = batch["inputs"].to(device)
                 batch_svbrdf = batch["svbrdf"].to(device)
 
                 outputs = model(batch_inputs)
-                output_maps = torch.cat(outputs.split(3, dim=1),
-                                        dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
-                target_maps = torch.cat(batch_svbrdf.split(3, dim=1),
-                                        dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
-                tensorboard_imgs = torch.utils.make_grid(output_maps, nrow=4)
-                writer.add_images(f"output_{epoch}", tensorboard_imgs)
-                tensorboard_imgs = torch.utils.make_grid(target_maps, nrow=4)
-                writer.add_images(f"target_{epoch}", tensorboard_imgs)
-                
+                if plot_flag:
+                    plot_flag = False
+                    output_maps = torch.cat(outputs.split(3, dim=1),
+                                            dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
+                    target_maps = torch.cat(batch_svbrdf.split(3, dim=1),
+                                            dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
+                    tensorboard_imgs = torchvision.utils.make_grid(output_maps, nrow=4)
+                    writer.add_images(f"output_{epoch}", tensorboard_imgs)
+                    tensorboard_imgs = torchvision.utils.make_grid(target_maps, nrow=4)
+                    writer.add_images(f"target_{epoch}", tensorboard_imgs)
+
                 val_loss += loss_function(outputs, batch_svbrdf).item()
                 batch_count_val += 1
             val_loss /= batch_count_val
