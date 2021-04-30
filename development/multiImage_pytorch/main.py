@@ -110,7 +110,7 @@ if args.mode == 'train':
 
     # Clear checkpoint in order to free up some memory
     checkpoint.purge()
-
+    n_steps = len(training_dataloader)
     model.train()
     for epoch in range(epoch_start, epoch_end):
         for i, batch in enumerate(training_dataloader):
@@ -153,13 +153,13 @@ if args.mode == 'train':
                 if plot_flag:
                     plot_flag = False
                     output_maps = torch.cat(outputs.split(3, dim=1),
-                                            dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
+                                            dim=0).clone().cpu().detach()
                     target_maps = torch.cat(batch_svbrdf.split(3, dim=1),
-                                            dim=0).clone().cpu().detach().permute(0, 2, 3, 1)
-                    tensorboard_imgs = torchvision.utils.make_grid(output_maps, nrow=4)
-                    writer.add_images(f"output_{epoch}", tensorboard_imgs)
-                    tensorboard_imgs = torchvision.utils.make_grid(target_maps, nrow=4)
-                    writer.add_images(f"target_{epoch}", tensorboard_imgs)
+                                            dim=0).clone().cpu().detach()
+                    out_imgs = torchvision.utils.make_grid(output_maps, nrow=4)
+                    target_imgs = torchvision.utils.make_grid(target_maps, nrow=4)
+                    tensorboard_imgs = torch.cat((out_imgs.unsqueeze(0), target_imgs.unsqueeze(0)), dim=0)
+                    writer.add_images(f"output_{epoch}", tensorboard_imgs, global_step=epoch * n_steps)
 
                 val_loss += loss_function(outputs, batch_svbrdf).item()
                 batch_count_val += 1
