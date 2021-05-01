@@ -79,7 +79,7 @@ if args.mode == 'train':
 
     # Set up the optimizer
     # TODO: Use betas=(0.5, 0.999)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, betas=(0.5, 0.999))
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, betas=(0.9, 0.999))
     if checkpoint.is_valid():
         optimizer = checkpoint.restore_optimizer_state(optimizer)
 
