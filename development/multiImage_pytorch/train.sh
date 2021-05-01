@@ -7,8 +7,8 @@ scale_mode='crop'
 used_image_count=10
 model_dir="/content/drive/MyDrive"
 epochs=100
-save_frequency=50
+save_frequency=1
 model_type="multi"
-validation_frequency=5
+validation_frequency=1
 
 python main.py --model-type $model_type --save-frequency $save_frequency --mode train --scale-mode $scale_mode --input-dir $input_dir --image-count $image_count --image-size $image_size --used-image-count $used_image_count --model-dir $model_dir --epochs $epochs --save-frequency $save_frequency --validation-frequency $validation_frequency
